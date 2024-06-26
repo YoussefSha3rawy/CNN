@@ -1,0 +1,1 @@
+rsync -uvaP --exclude=wandb --exclude=__pycache__ --exclude=*.zip --exclude=weights ./* adfx751@localhost:Project

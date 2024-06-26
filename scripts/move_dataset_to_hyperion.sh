@@ -1,0 +1,1 @@
+rsync -uah --info=progress2 --no-inc-recursive --stats --exclude="*.zip" /Users/youssefshaarawy/Documents/Datasets/JustRAIGS adfx751@localhost:Datasets

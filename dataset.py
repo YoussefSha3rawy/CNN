@@ -15,7 +15,7 @@ class JustRAIGSDataset(Dataset):
     def __init__(self, data_folder, stage, transforms=None):
         """
         :param data_folder: # folder with JSON data files
-        :param split: one of 'train' or 'test'
+        :param stage: one of 'train' or 'test'
         """
 
         self.data_folder = data_folder
@@ -32,21 +32,23 @@ class JustRAIGSDataset(Dataset):
             with open(os.path.join(data_folder, 'test_images.json'), 'r') as j:
                 self.images = json.load(j)
         self.load_ground_truths()
+        print(f'Loaded {len(self.images)} {self.stage} images')
 
     def load_ground_truths(self):
         df = pd.read_csv(os.path.join(
             self.data_folder, 'JustRAIGS_Train_labels.csv'), sep=';')
 
-        df['GT'] = df['Final Label'] == 'RG'
+        df['GT'] = (df['Final Label'] == 'RG').astype(int)
         self.ground_truths = df.set_index('Eye ID')['GT'].to_dict()
 
     def __getitem__(self, i):
-        img = Image.open(self.images[i], mode='r')
+        img = Image.open(os.path.join(
+            self.data_folder, self.images[i]), mode='r')
         img = img.convert('RGB')
 
         index = os.path.splitext(os.path.basename(self.images[i]))[0]
 
-        gt = self.ground_truths[index]
+        gt = torch.tensor(self.ground_truths[index])
 
         if self.transforms:
             img = self.transforms(img)
@@ -69,9 +71,11 @@ def prepare_data():
             if img.endswith(".jpg") or img.endswith(".JPG"):
                 image_name = os.path.splitext(img)[0]
                 if df.loc[image_name, 'Final Label'] == 'RG':
-                    true_images.append(os.path.join(folder, img))
+                    true_images.append(os.path.join(
+                        os.path.basename(folder), img))
                 else:
-                    false_images.append(os.path.join(folder, img))
+                    false_images.append(os.path.join(
+                        os.path.basename(folder), img))
 
     random.seed(43)
     random.shuffle(true_images)

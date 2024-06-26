@@ -1,0 +1,10 @@
+dataset:
+  data_folder: /Users/youssefshaarawy/Documents/Datasets/JustRAIGS
+  data_folder_hyperion: '/users/adfx751/Datasets/JustRAIGS'
+dataloader:
+  shuffle: True
+  batch_size: 32
+train:
+  lr: 0.001
+  epochs: 100
+  early_stopping: 20
