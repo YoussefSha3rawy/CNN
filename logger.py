@@ -1,6 +1,7 @@
 import wandb
 import datetime
-
+import numpy as np
+from sklearn.metrics import confusion_matrix
 
 class Logger:
     step = 0
@@ -12,6 +13,28 @@ class Logger:
 
     def log(self, data):
         self.logger.log(data)
+
+    def log_confusion_matrix(self, y_true, y_pred):
+        """
+        Logs a confusion matrix to W&B and returns the confusion matrix.
+
+        Parameters:
+        y_true (list or np.array): True labels.
+        y_pred (list or np.array): Predicted labels.
+
+        Returns:
+        np.array: Confusion matrix.
+        """
+        # Infer class names
+        class_names = [str(cl) for cl in np.unique(np.concatenate((y_true, y_pred)))]
+
+        # Log the confusion matrix plot to W&B
+        self.logger.log({"confusion_matrix": wandb.plot.confusion_matrix(
+            probs=None,
+            y_true=y_true,
+            preds=y_pred,
+            class_names=class_names
+        )})
 
     def watch(self, model):
         self.logger.watch(model, log='all')

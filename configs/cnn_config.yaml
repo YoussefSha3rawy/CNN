@@ -1,9 +1,13 @@
 dataset:
-  data_folder: /Users/youssefshaarawy/Documents/Datasets/JustRAIGS
-  data_folder_hyperion: '/users/adfx751/Datasets/JustRAIGS'
+  data_folder: /Users/youssefshaarawy/Documents/Datasets/OCT2017
+  data_folder_hyperion: '/users/adfx751/Datasets/OCT2017'
+  train_folder: 'train_balanced'
+  val_folder: 'val'
+  test_folder: 'test'
 dataloader:
   shuffle: True
-  batch_size: 32
+  batch_size: 64
+  num_workers: 8
 train:
   lr: 0.001
   epochs: 100

@@ -13,21 +13,18 @@ from tqdm import tqdm
 from dotenv import load_dotenv
 from logger import Logger
 import json
+from torchvision.datasets import ImageFolder
 
-
-# Set device
-device = torch.device("cuda" if torch.cuda.is_available(
-) else "mps" if torch.backends.mps.is_available() else "cpu")
-print(f'Using device: {device}')
-
-# Hyperparameter file path
-settings_path = os.path.join('configs', 'cnn_config.yaml')
 
 
 def main():
+    # Set device
+    device = torch.device("cuda" if torch.cuda.is_available(
+    ) else "mps" if torch.backends.mps.is_available() else "cpu")
+    print(f'Using device: {device}')
 
-    load_dotenv()
-
+    # Hyperparameter file path
+    settings_path = os.path.join('configs', 'cnn_config.yaml')
     # Read settings from YAML file
     settings = read_settings(settings_path)
 
@@ -40,19 +37,23 @@ def main():
     transform = models.ResNet50_Weights.DEFAULT.transforms()
 
     # Load Dataset
-    train_dataset = JustRAIGSDataset(
-        **dataset_settings, stage='train', transforms=transform)
+    # train_dataset = JustRAIGSDataset(
+    #     **dataset_settings, stage='train', transforms=transform)
+    train_dataset = ImageFolder(os.path.join(dataset_settings['data_folder'], dataset_settings['train_folder']), transform=transform)
+
     train_loader = DataLoader(dataset=train_dataset,
                               **dataloader_settings)
 
-    val_dataset = JustRAIGSDataset(
-        **dataset_settings, stage='test', transforms=transform)
+    # val_dataset = JustRAIGSDataset(
+    #     **dataset_settings, stage='test', transforms=transform)
+
+    val_dataset = ImageFolder(os.path.join(dataset_settings['data_folder'], dataset_settings['val_folder']), transform=transform)
     val_loader = DataLoader(dataset=val_dataset,
                             **dataloader_settings)
 
     # Load pre-trained model and modify the final layer
     model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-    model.fc = nn.Linear(model.fc.in_features, 2)
+    model.fc = nn.Linear(model.fc.in_features, len(train_dataset.classes))
     model = model.to(device)
 
     # Loss and optimizer
@@ -65,22 +66,23 @@ def main():
     # Main training loop
     best_val_acc = 0.0
     num_epochs = train_settings['epochs']
-    for epoch in range(num_epochs):
+    epochs_since_improvement = 0
+    for epoch in range(1, num_epochs+1):
         train_loss, train_acc = train(
-            model, train_loader, criterion, optimizer)
-        val_loss, val_acc = validate(model, val_loader, criterion)
+            model, train_loader, criterion, optimizer, device)
+        val_loss, val_acc, all_val_labels, all_val_predictions = validate(model, val_loader, criterion, device)
 
-        print(f'Epoch [{epoch+1}/{num_epochs}] '
-              f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% '
-              f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%')
+        print(f'Epoch [{epoch}/{num_epochs}] '
+              f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%'
+              f'Val Acc: {val_acc:.2f}%')
 
         logger.log({'Train Loss': train_loss,
                     'Train Acc': train_acc,
-                    'Val Loss': val_loss,
-                    'Val Acc': val_acc})
+                    'Val Acc': val_acc
+                    })
+        logger.log_confusion_matrix(all_val_labels, all_val_predictions)
 
         # Save the model if validation accuracy is the best
-        epochs_since_improvement = 0
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             epochs_since_improvement = 0
@@ -96,7 +98,7 @@ def main():
     print(f'Best Validation Accuracy: {best_val_acc:.2f}%')
 
 
-def train(model, dataloader, criterion, optimizer):
+def train(model, dataloader, criterion, optimizer, device):
     model.train()
     running_loss = 0.0
     correct = 0
@@ -117,16 +119,19 @@ def train(model, dataloader, criterion, optimizer):
 
     epoch_loss = running_loss / len(dataloader)
     epoch_acc = 100. * correct / total
+
     return epoch_loss, epoch_acc
 
 # Validation function
 
 
-def validate(model, dataloader, criterion):
+def validate(model, dataloader, criterion, device):
     model.eval()
     running_loss = 0.0
     correct = 0
     total = 0
+    
+    all_labels, all_predictions = [], []
 
     with torch.no_grad():
         for inputs, labels in dataloader:
@@ -138,9 +143,13 @@ def validate(model, dataloader, criterion):
             total += labels.size(0)
             correct += predicted.eq(labels).sum().item()
 
+            all_labels.extend(labels.cpu().numpy())
+            all_predictions.extend(predicted.cpu().numpy())
+
     epoch_loss = running_loss / len(dataloader)
     epoch_acc = 100. * correct / total
-    return epoch_loss, epoch_acc
+
+    return epoch_loss, epoch_acc, all_labels, all_predictions
 
 
 if __name__ == "__main__":
