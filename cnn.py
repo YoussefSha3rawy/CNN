@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 import torch.nn as nn
 import os
-from utils import read_settings, save_checkpoint
+from utils import load_checkpoint, read_settings, save_checkpoint
 from dataset import JustRAIGSDataset
 from tqdm import tqdm
 from dotenv import load_dotenv
@@ -34,7 +34,7 @@ def main():
         'dataset'], settings['dataloader'], settings['train']
 
     # Data preprocessing and augmentation
-    transform = models.ResNet50_Weights.DEFAULT.transforms()
+    transform = models.DenseNet121_Weights.DEFAULT.transforms()
 
     # Load Dataset
     # train_dataset = JustRAIGSDataset(
@@ -52,8 +52,8 @@ def main():
                             **dataloader_settings)
 
     # Load pre-trained model and modify the final layer
-    model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-    model.fc = nn.Linear(model.fc.in_features, len(train_dataset.classes))
+    model = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
+    model.classifier = nn.Linear(model.classifier.in_features, len(train_dataset.classes))
     model = model.to(device)
 
     # Loss and optimizer
@@ -95,7 +95,22 @@ def main():
                 f"Validation accuracy did not improve for {epochs_since_improvement} epochs. Stopping training.")
             break
 
-    print(f'Best Validation Accuracy: {best_val_acc:.2f}%')
+    print(f'Best Validation Accuracy: {best_val_acc:.4f}%')
+
+    model, _, _ = load_checkpoint(model, device=device)
+
+    test_dataset = ImageFolder(os.path.join(dataset_settings['data_folder'], dataset_settings['test_folder']), transform=transform)
+
+    test_loader = DataLoader(dataset=test_dataset,
+                              **dataloader_settings)
+    test_loss, test_acc, all_test_labels, all_test_predictions = validate(model, test_loader, criterion, device)
+
+    print(f'Test Acc: {test_acc:.4f}%')
+
+    logger.log({
+                'Test Acc': test_acc
+                })
+    logger.log_confusion_matrix(all_test_labels, all_test_predictions)
 
 
 def train(model, dataloader, criterion, optimizer, device):
@@ -118,7 +133,7 @@ def train(model, dataloader, criterion, optimizer, device):
         correct += predicted.eq(labels).sum().item()
 
     epoch_loss = running_loss / len(dataloader)
-    epoch_acc = 100. * correct / total
+    epoch_acc = correct / total
 
     return epoch_loss, epoch_acc
 
@@ -134,7 +149,7 @@ def validate(model, dataloader, criterion, device):
     all_labels, all_predictions = [], []
 
     with torch.no_grad():
-        for inputs, labels in dataloader:
+        for inputs, labels in tqdm(dataloader):
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
             loss = criterion(outputs, labels)
@@ -147,7 +162,7 @@ def validate(model, dataloader, criterion, device):
             all_predictions.extend(predicted.cpu().numpy())
 
     epoch_loss = running_loss / len(dataloader)
-    epoch_acc = 100. * correct / total
+    epoch_acc = correct / total
 
     return epoch_loss, epoch_acc, all_labels, all_predictions
 

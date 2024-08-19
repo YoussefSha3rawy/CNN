@@ -47,6 +47,27 @@ def save_checkpoint(epoch, model, optimizer, logger=None):
     return save_path
 
 
+def load_checkpoint(model, optimizer=None, device='cpu'):
+    file_name = f"{model.__class__.__name__}_ckpt.pth"
+    directory_name = 'weights'
+    load_path = os.path.join(directory_name, file_name)
+
+    if not os.path.exists(load_path):
+        raise FileNotFoundError(f"No checkpoint found at '{load_path}'")
+
+    ckpt = torch.load(load_path, map_location=torch.device(device))
+
+    model.load_state_dict(ckpt['model_weights'])
+
+    if optimizer:
+        optimizer.load_state_dict(ckpt['optimizer_state'])
+
+    epoch = ckpt['epoch']
+
+    print(f"Checkpoint loaded from '{load_path}' at epoch {epoch}")
+
+    return model, epoch, optimizer
+
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description='Process settings from a YAML file.')
