@@ -343,3 +343,5 @@ pyrightconfig.json
 
 wandb
 weights/*
+
+scripts*
