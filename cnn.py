@@ -1,8 +1,6 @@
 
 import torch
 import torchvision.models as models
-import torchvision.datasets as datasets
-import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 import torch.optim as optim
 import torch.nn as nn
@@ -10,7 +8,6 @@ import os
 from utils import load_checkpoint, read_settings, save_checkpoint
 from dataset import JustRAIGSDataset
 from tqdm import tqdm
-from dotenv import load_dotenv
 from logger import Logger
 import json
 from torchvision.datasets import ImageFolder
