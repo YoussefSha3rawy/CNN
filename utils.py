@@ -1,14 +1,11 @@
-import socket
 import time
 import argparse
-import yaml
 import os
 import torch
 import wandb
 
-
-device = torch.device("cuda" if torch.cuda.is_available(
-) else 'mps' if torch.backends.mps.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else 'mps' if torch.
+                      backends.mps.is_available() else "cpu")
 
 
 def adjust_learning_rate(optimizer, shrink_factor):
@@ -22,10 +19,11 @@ def adjust_learning_rate(optimizer, shrink_factor):
     print("\nDECAYING learning rate.")
     for param_group in optimizer.param_groups:
         param_group['lr'] = param_group['lr'] * shrink_factor
-    print("The new learning rate is %f\n" % (optimizer.param_groups[0]['lr'],))
+    print("The new learning rate is %f\n" %
+          (optimizer.param_groups[0]['lr'], ))
 
 
-def save_checkpoint(epoch, model, optimizer, logger=None):
+def save_checkpoint(dir, epoch, model, optimizer, logger=None):
     ckpt = {
         'epoch': epoch,
         'model_weights': model.state_dict(),
@@ -34,24 +32,18 @@ def save_checkpoint(epoch, model, optimizer, logger=None):
 
     file_name = f"{model.__class__.__name__}_ckpt.pth"
 
-    directory_name = 'weights'
-    os.makedirs(directory_name, exist_ok=True)
-    save_path = os.path.join(directory_name, file_name)
+    os.makedirs(dir, exist_ok=True)
+    save_path = os.path.join(dir, file_name)
     torch.save(ckpt, save_path)
     if logger:
-        artifact = wandb.Artifact(
-            name=file_name, type="model")
+        artifact = wandb.Artifact(name=file_name, type="model")
         # Add dataset file to artifact
         artifact.add_file(local_path=save_path)
         logger.log_artifact(artifact)
     return save_path
 
 
-def load_checkpoint(model, optimizer=None, device='cpu'):
-    file_name = f"{model.__class__.__name__}_ckpt.pth"
-    directory_name = 'weights'
-    load_path = os.path.join(directory_name, file_name)
-
+def load_checkpoint(load_path, model, optimizer=None, device='cpu'):
     if not os.path.exists(load_path):
         raise FileNotFoundError(f"No checkpoint found at '{load_path}'")
 
@@ -68,28 +60,124 @@ def load_checkpoint(model, optimizer=None, device='cpu'):
 
     return model, epoch, optimizer
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(
-        description='Process settings from a YAML file.')
-    parser.add_argument('--config', type=str, default='configs/cnn_config.yaml',
-                        help='Path to YAML configuration file')
-    return parser.parse_args()
 
+def load_latest_checkpoint(dir, model, optimizer=None, device='cpu'):
+    latest_ckpt = None
+    latest_ckpt_epoch = 0
+    latest_ckpt_path = ''
+    for file_path in os.listdir(dir):
+        if file_path.endswith(".pth"):
+            ckpt = torch.load(os.path.join(dir, file_path),
+                              map_location=torch.device(device))
+            if ckpt['epoch'] > latest_ckpt_epoch:
+                latest_ckpt = ckpt
+                latest_ckpt_epoch = ckpt['epoch']
+                latest_ckpt_path = os.path.join(dir, file_path)
 
-def read_settings(config_path):
-    with open(config_path, 'r') as file:
-        settings = yaml.safe_load(file)
+    if latest_ckpt:
+        model.load_state_dict(latest_ckpt['model_weights'])
 
-    hostname = socket.gethostname()
+        if optimizer:
+            optimizer.load_state_dict(latest_ckpt['optimizer_state'])
 
-    if hostname.endswith('local'):  # Example check for local machine names
-        print("Running on Macbook locally")
+        epoch = latest_ckpt['epoch']
+
+        print(f"Checkpoint loaded from '{latest_ckpt_path}' at epoch {epoch}")
     else:
-        print(f"Running on remote server: {hostname}")
-        settings['dataset']['data_folder'] = settings['dataset']['data_folder_hyperion']
+        print(f"No checkpoints found at {dir}")
 
-    del settings['dataset']['data_folder_hyperion']
-    return settings
+    return model, epoch, optimizer
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Train Settings')
+
+    # Model arguments
+    parser.add_argument('--model',
+                        type=str,
+                        default='densenet121',
+                        help='Model name')
+
+    parser.add_argument('--run_dir',
+                        default='',
+                        type=str,
+                        help='Run directory')
+
+    # Dataset arguments
+    parser.add_argument('--data_folder',
+                        type=str,
+                        help='Path to dataset folder')
+    parser.add_argument('--train_folder',
+                        type=str,
+                        default='train_balanced',
+                        help='Name of the train folder')
+    parser.add_argument('--val_folder',
+                        type=str,
+                        default='val',
+                        help='Name of the validation folder')
+    parser.add_argument('--test_folder',
+                        type=str,
+                        default='test_upsampled',
+                        help='Name of the test folder')
+    parser.add_argument('--image_size',
+                        type=int,
+                        default=224,
+                        help='Size of input images')
+
+    # Dataloader arguments
+    parser.add_argument('--shuffle',
+                        type=bool,
+                        default=True,
+                        help='Shuffle the data')
+    parser.add_argument('--batch_size',
+                        type=int,
+                        default=64,
+                        help='Batch size for training')
+    parser.add_argument('--num_workers',
+                        type=int,
+                        default=8,
+                        help='Number of workers for data loading')
+
+    # Training arguments
+    parser.add_argument('--lr',
+                        type=float,
+                        default=0.001,
+                        help='Learning rate')
+    parser.add_argument('--epochs',
+                        type=int,
+                        default=100,
+                        help='Number of training epochs')
+    parser.add_argument('--early_stopping',
+                        type=int,
+                        default=0,
+                        help='Early stopping patience')
+
+    args = parser.parse_args()
+
+    create_new_run_dir(args)
+
+    return args
+
+
+def create_new_run_dir(args):
+    if args.run_dir == '':
+        runs_dir = './runs'
+        latest_run = 0
+        if os.path.exists(runs_dir):
+            for dir in os.listdir(runs_dir):
+                dir_path = os.path.join(runs_dir, dir)
+                if os.path.isdir(dir_path):
+                    try:
+                        dir_int = int(dir)
+                        if dir_int > latest_run:
+                            latest_run = dir_int
+                    except ValueError:
+                        continue
+
+        experiment_run = f'{latest_run + 1}'
+        args.run_dir = os.path.join(runs_dir, experiment_run)
+
+    os.makedirs(args.run_dir, exist_ok=True)
 
 
 def time_function(func):
@@ -101,4 +189,5 @@ def time_function(func):
         print(
             f"Execution time of {func.__name__}: {execution_time:.6f} seconds")
         return result
+
     return wrapper

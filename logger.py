@@ -3,6 +3,7 @@ import datetime
 import numpy as np
 from sklearn.metrics import confusion_matrix
 
+
 class Logger:
     step = 0
 
@@ -11,7 +12,7 @@ class Logger:
         logger = wandb.init(project=project, name=logger_name, config=config)
         self.logger = logger
 
-    def log(self, data):
+    def log_dict(self, data):
         self.logger.log(data)
 
     def log_confusion_matrix(self, y_true, y_pred):
@@ -26,15 +27,18 @@ class Logger:
         np.array: Confusion matrix.
         """
         # Infer class names
-        class_names = [str(cl) for cl in np.unique(np.concatenate((y_true, y_pred)))]
+        class_names = [
+            str(cl) for cl in np.unique(np.concatenate((y_true, y_pred)))
+        ]
 
         # Log the confusion matrix plot to W&B
-        self.logger.log({"confusion_matrix": wandb.plot.confusion_matrix(
-            probs=None,
-            y_true=y_true,
-            preds=y_pred,
-            class_names=class_names
-        )})
+        self.logger.log({
+            "confusion_matrix":
+            wandb.plot.confusion_matrix(probs=None,
+                                        y_true=y_true,
+                                        preds=y_pred,
+                                        class_names=class_names)
+        })
 
     def watch(self, model):
         self.logger.watch(model, log='all')
