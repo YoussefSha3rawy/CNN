@@ -2,7 +2,12 @@ import torch
 from tqdm import tqdm
 
 
-def train_eval(model, dataloader, criterion, optimizer=None, device='cpu'):
+def train_eval(model,
+               dataloader,
+               criterion,
+               optimizer=None,
+               scheduler=None,
+               device='cpu'):
     is_train = optimizer is not None
     if is_train:
         model.train()
@@ -30,6 +35,8 @@ def train_eval(model, dataloader, criterion, optimizer=None, device='cpu'):
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                if scheduler is not None:
+                    scheduler.step()
 
             _, predicted = outputs.max(1)
             total += labels.size(0)

@@ -345,3 +345,4 @@ wandb
 weights/*
 
 scripts*
+runs

@@ -1,7 +1,7 @@
 import torch
 import torch.optim as optim
 import torch.nn as nn
-from utils import load_checkpoint, parse_arguments, save_checkpoint, load_latest_checkpoint
+from utils import parse_arguments, save_checkpoint, load_latest_checkpoint, get_attention_weights
 from logger import Logger
 import json
 from model import get_model
@@ -51,6 +51,8 @@ def main():
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr)
+    optimizer_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer, T_0=10, eta_min=1e-5)
 
     logger = Logger(args,
                     logger_name=model.__class__.__name__,
@@ -64,6 +66,7 @@ def main():
                                                  dataloader=train_loader,
                                                  criterion=criterion,
                                                  optimizer=optimizer,
+                                                 scheduler=optimizer_scheduler,
                                                  device=device)
         _, val_acc, all_val_labels, all_val_predictions = train_eval(
             model=model,

@@ -181,6 +181,7 @@ def create_new_run_dir(args):
 
 
 def time_function(func):
+
     def wrapper(*args, **kwargs):
         start_time = time.perf_counter()
         result = func(*args, **kwargs)
@@ -191,3 +192,28 @@ def time_function(func):
         return result
 
     return wrapper
+
+
+def get_attention_weights(model, x):
+    # Extract the attention weights
+    attentions = []
+
+    def hook(module, input, output):
+        attentions.append(output)
+
+    # Register the hook to the attention layers (in this case, for all transformer blocks)
+    handles = []
+    for block in model.blocks:
+        handle = block.attn.register_forward_hook(hook)
+        handles.append(handle)
+
+    # Forward pass through the model
+    with torch.no_grad():
+        _ = model(x)
+
+    # Remove the hooks
+    for handle in handles:
+        handle.remove()
+
+    # Return the attention weights from all layers
+    return attentions
